@@ -574,6 +574,8 @@ export function useWorkflowDocumentNodes(deps: WorkflowDocumentNodesDeps) {
 		invalid: INodeCredentialsDetails;
 		type: string;
 	}) {
+		let changed = false;
+
 		nodes.value.forEach((node: INodeUi) => {
 			const nodeCredentials: INodeCredentials | undefined = (node as unknown as INode).credentials;
 			if (!nodeCredentials?.[data.type]) {
@@ -582,25 +584,36 @@ export function useWorkflowDocumentNodes(deps: WorkflowDocumentNodesDeps) {
 
 			const nodeCredentialDetails: INodeCredentialsDetails | string = nodeCredentials[data.type];
 
+			let shouldReplace = false;
 			if (
 				typeof nodeCredentialDetails === 'string' &&
 				nodeCredentialDetails === data.invalid.name
 			) {
-				(node.credentials as INodeCredentials)[data.type] = data.credentials;
-				return;
-			}
-
-			if (nodeCredentialDetails.id === null) {
+				shouldReplace = true;
+			} else if (nodeCredentialDetails.id === null) {
 				if (nodeCredentialDetails.name === data.invalid.name) {
-					(node.credentials as INodeCredentials)[data.type] = data.credentials;
+					shouldReplace = true;
 				}
+			} else if (nodeCredentialDetails.id === data.invalid.id) {
+				shouldReplace = true;
+			}
+
+			if (!shouldReplace) {
 				return;
 			}
 
-			if (nodeCredentialDetails.id === data.invalid.id) {
-				(node.credentials as INodeCredentials)[data.type] = data.credentials;
-			}
+			// Route the write through the tracked update path: it syncs the
+			// workflow object and fires the change event, and the dirty trigger
+			// below schedules the save that persists the replacement.
+			changed =
+				updateNodeById(node.id, {
+					credentials: { ...nodeCredentials, [data.type]: data.credentials },
+				}) || changed;
 		});
+
+		if (changed) {
+			void onStateDirty.trigger();
+		}
 	}
 
 	// Assign credential to all nodes that support it but don't have it set

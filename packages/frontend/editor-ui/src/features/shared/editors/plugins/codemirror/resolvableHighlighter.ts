@@ -102,13 +102,18 @@ export const coloringStateField = StateField.define<DecorationSet>({
 			for (const txEffect of transaction.effects) {
 				if (txEffect.is(coloringStateEffects.removeColorEffect)) {
 					colorings = colorings.update({
-						filter: (from, to) => txEffect.value.from !== from && txEffect.value.to !== to,
+						// Only drop the decoration at the exact range. Matching on a
+						// shared boundary alone would delete neighbours that merely
+						// touch this range (e.g. a zero-length range at their edge).
+						filter: (from, to) =>
+							!(txEffect.value.from === from && txEffect.value.to === to),
 					});
 				}
 
 				if (txEffect.is(coloringStateEffects.addColorEffect)) {
 					colorings = colorings.update({
-						filter: (from, to) => txEffect.value.from !== from && txEffect.value.to !== to,
+						filter: (from, to) =>
+							!(txEffect.value.from === from && txEffect.value.to === to),
 					});
 
 					const decoration = resolvableStateToDecoration[txEffect.value.state ?? 'pending'];
